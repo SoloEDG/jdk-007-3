@@ -1,4 +1,4 @@
-import type { Track, Instrument, Note, Session } from "@/shared/types";
+import type { Track, Instrument, Note, Session, AudioClip } from "@/shared/types";
 import { uid } from "@/shared/math";
 import { validateSession } from "../lib/validation";
 export function createArrangement() {
@@ -15,6 +15,12 @@ export function createArrangement() {
     "#cec080",
     "#a6b6c9",
   ];
+  const labelOf = (instrument: Instrument, index: number) =>
+    instrument === "drums"
+      ? `鼓组 ${index + 1}`
+      : instrument === "keys"
+        ? `琴键 ${index + 1}`
+        : `人声 ${index + 1}`;
   return {
     snapshot() {
       return { tracks: structuredClone(tracks), selected, title };
@@ -32,7 +38,7 @@ export function createArrangement() {
         throw new Error("最多支持 8 条轨道，请先移除一条");
       const t: Track = {
         id: uid(),
-        name: `${instrument === "drums" ? "鼓组" : "琴键"} ${tracks.length + 1}`,
+        name: labelOf(instrument, tracks.filter((x) => x.instrument === instrument).length),
         instrument,
         color: colors[tracks.length % colors.length],
         notes: [],
@@ -51,6 +57,26 @@ export function createArrangement() {
         t.id === id ? { ...t, notes: structuredClone(notes) } : t,
       );
     },
+    // 人声片段：仅在新片段成功产出后调用，失败路径不会触达这里，原片段天然保留。
+    commitClip(id: string, clip: AudioClip) {
+      if (!tracks.some((t) => t.id === id)) throw new Error("录音目标已不存在");
+      tracks = tracks.map((t) =>
+        t.id === id && t.instrument === "vocals"
+          ? { ...t, clip: structuredClone(clip), notes: [] }
+          : t,
+      );
+    },
+    clearClip(id: string): AudioClip | null {
+      const target = tracks.find((t) => t.id === id);
+      const previous = target?.clip ?? null;
+      tracks = tracks.map((t) => (t.id === id ? { ...t, clip: undefined } : t));
+      return previous;
+    },
+    markClipMissing(id: string) {
+      tracks = tracks.map((t) =>
+        t.id === id && t.clip ? { ...t, clip: { ...t.clip, missing: true } } : t,
+      );
+    },
     resizeLoop(beats: number) {
       tracks = tracks.map((track) => ({
         ...track,
@@ -63,7 +89,9 @@ export function createArrangement() {
       }));
     },
     clear(id: string) {
-      this.commit(id, []);
+      const target = tracks.find((t) => t.id === id);
+      if (target?.instrument === "vocals") this.clearClip(id);
+      else this.commit(id, []);
     },
     restore(raw: Session) {
       const session = validateSession(raw);

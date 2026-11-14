@@ -14,6 +14,11 @@ export function TrackActions({
   remove: () => void;
   clear: () => void;
 }) {
+  const hasContent = selected
+    ? selected.instrument === "vocals"
+      ? !!selected.clip
+      : selected.notes.length > 0
+    : false;
   return (
     <div className="track-actions">
       <button disabled={locked || count >= 8} onClick={() => add("drums")}>
@@ -22,12 +27,12 @@ export function TrackActions({
       <button disabled={locked || count >= 8} onClick={() => add("keys")}>
         ＋ 琴键轨道
       </button>
+      <button disabled={locked || count >= 8} onClick={() => add("vocals")}>
+        ＋ 人声音轨
+      </button>
       <span>{count} / 8 轨道</span>
-      <button
-        disabled={locked || !selected || !selected.notes.length}
-        onClick={clear}
-      >
-        清空音符
+      <button disabled={locked || !selected || !hasContent} onClick={clear}>
+        {selected?.instrument === "vocals" ? "移除片段" : "清空音符"}
       </button>
       <button
         disabled={locked || !selected}
